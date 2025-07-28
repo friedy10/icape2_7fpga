@@ -16,6 +16,7 @@ module top (
     endfunction
 
     // Hex to ASCII lookup table
+    // convert string to hex representation
     wire [7:0] htoa_c [0:15];
     assign htoa_c[0]  = 8'h30; // '0'
     assign htoa_c[1]  = 8'h31; // '1'
@@ -57,11 +58,11 @@ module top (
     //--------------------------------------------------------------------
     // ICAP Signals
     //--------------------------------------------------------------------
-    reg  [31:0] I = 32'h00000000;
-    wire [31:0] O;
+    reg  [31:0] I = 32'h00000000;       // config data input 
+    wire [31:0] O;                      // config data output
     wire        CLK;
-    reg         CSIB = 1'b0;
-    reg         RDWRB = 1'b0;
+    reg         CSIB = 1'b0;            // active-low icap enable
+    reg         RDWRB = 1'b0;           // read/write select input
 
     //--------------------------------------------------------------------
     // FRAME_ECC Signals
@@ -208,9 +209,9 @@ module top (
             OFF_RBACK+4,  OFF_RBACK+2048+4:  icap <= {2'b00, 32'h30008001};
             OFF_RBACK+5,  OFF_RBACK+2048+5:  icap <= {2'b00, 32'h00000004};
             OFF_RBACK+6,  OFF_RBACK+2048+6:  icap <= {2'b00, 32'h20000000};
-            OFF_RBACK+7,  OFF_RBACK+2048+7:  icap <= {2'b00, 32'h30002001};
-            OFF_RBACK+8,  OFF_RBACK+2048+8:  icap <= {2'b00, 32'h0002051A};
-            OFF_RBACK+9,  OFF_RBACK+2048+9:  icap <= {2'b00, 32'h28006194};
+            OFF_RBACK+7,  OFF_RBACK+2048+7:  icap <= {2'b00, 32'h30002001}; // write #1 at FAR
+            OFF_RBACK+8,  OFF_RBACK+2048+8:  icap <= {2'b00, 32'h0002051A}; // Frame address 
+            OFF_RBACK+9,  OFF_RBACK+2048+9:  icap <= {2'b00, 32'h28006194}; // READ THIS MUCH BACK
             OFF_RBACK+10, OFF_RBACK+2048+10: icap <= {2'b11, 32'h20000000};
 
             OFF_RDSYN+0, OFF_RDSYN+2048+0: icap <= {2'b00, 32'h30008001};
@@ -241,15 +242,18 @@ module top (
             OFF_FDSYN+6: icap <= {2'b11, 32'hFFFFFFFF};
 
             default: begin
+                // don't screw with the icap while we are writing
                 if ((cnt_v >= OFF_WDATA && cnt_v < OFF_F0FLT) ||
                     (cnt_v > OFF_F0FLT && cnt_v < OFF_F1FLT) ||
                     (cnt_v > OFF_F1FLT && cnt_v < OFF_WDSYN)) begin
                     icap <= {2'b00, 32'h00000000};
                 end
+                // don't screw with the icap while we are reading
                 else if ((cnt_v >= OFF_RDATA && cnt_v < OFF_RDSYN) ||
                          (cnt_v >= OFF_RDATA+2048 && cnt_v < OFF_RDSYN+2048)) begin
                     icap <= {2'b01, 32'h20000000};
                 end
+                // don't screw with it while we are doing other things
                 else if (cnt_v >= OFF_FDATA && cnt_v < OFF_FDSYN) begin
                     icap <= {2'b00, 32'h00000000};
                 end
@@ -341,6 +345,8 @@ module top (
                       3'b000, SYNDROME, SYNWORD, SYNBIT,
                       CRCERROR, ECCERRORSINGLE, ECCERROR, SYNDROMEVALID};
             
+            // enable the icap and read in I and O
+            // icap_clk is being manually controlled, and it acts as a clock signal for the ICAP interface.  
             icap_clk <= 1'b1;
             cout_cnt_v <= 0;
         end
@@ -414,5 +420,4 @@ module top (
             end
         endcase
     end
-
 endmodule
